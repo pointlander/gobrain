@@ -43,18 +43,18 @@ func (nn *FeedForward) Init(inputs, hiddens, outputs int) {
 	nn.HiddenActivations = vector(nn.NHiddens, 1.0)
 	nn.OutputActivations = vector(nn.NOutputs, 1.0)
 
-	nn.InputWeights = matrix(nn.NInputs, nn.NHiddens)
-	nn.OutputWeights = matrix(nn.NHiddens, nn.NOutputs)
+	nn.InputWeights = matrix(nn.NHiddens, nn.NInputs)
+	nn.OutputWeights = matrix(nn.NOutputs, nn.NHiddens)
 
 	for i := 0; i < nn.NInputs; i++ {
 		for j := 0; j < nn.NHiddens; j++ {
-			nn.InputWeights[i][j] = random(-1, 1)
+			nn.InputWeights[j][i] = random(-1, 1)
 		}
 	}
 
 	for i := 0; i < nn.NHiddens; i++ {
 		for j := 0; j < nn.NOutputs; j++ {
-			nn.OutputWeights[i][j] = random(-1, 1)
+			nn.OutputWeights[j][i] = random(-1, 1)
 		}
 	}
 
@@ -106,11 +106,7 @@ func (nn *FeedForward) Update(inputs []float64) []float64 {
 		if len(nn.DropoutMask) != 0 && nn.DropoutMask[i] {
 			continue
 		}
-		var sum float64
-
-		for j := 0; j < nn.NInputs; j++ {
-			sum += nn.InputActivations[j] * nn.InputWeights[j][i]
-		}
+		sum := dot64(nn.InputActivations, nn.InputWeights[i])
 
 		// compute contexts sum
 		for k := 0; k < len(nn.Contexts); k++ {
@@ -134,10 +130,7 @@ func (nn *FeedForward) Update(inputs []float64) []float64 {
 	}
 
 	for i := 0; i < nn.NOutputs; i++ {
-		var sum float64
-		for j := 0; j < nn.NHiddens; j++ {
-			sum += nn.HiddenActivations[j] * nn.OutputWeights[j][i]
-		}
+		sum := dot64(nn.HiddenActivations, nn.OutputWeights[i])
 
 		nn.OutputActivations[i] = sigmoid(sum)
 	}
@@ -158,11 +151,7 @@ func (nn *FeedForward) UpdateWithNoise(inputs []float64, noise [][]float64) []fl
 		if len(nn.DropoutMask) != 0 && nn.DropoutMask[i] {
 			continue
 		}
-		var sum float64
-
-		for j := 0; j < nn.NInputs; j++ {
-			sum += nn.InputActivations[j] * nn.InputWeights[j][i]
-		}
+		sum := dot64(nn.InputActivations, nn.InputWeights[i])
 
 		// compute contexts sum
 		for k := 0; k < len(nn.Contexts); k++ {
@@ -186,10 +175,7 @@ func (nn *FeedForward) UpdateWithNoise(inputs []float64, noise [][]float64) []fl
 	}
 
 	for i := 0; i < nn.NOutputs; i++ {
-		var sum float64
-		for j := 0; j < nn.NHiddens; j++ {
-			sum += nn.HiddenActivations[j] * nn.OutputWeights[j][i]
-		}
+		sum := dot64(nn.HiddenActivations, nn.OutputWeights[i])
 
 		nn.OutputActivations[i] = normalize(sigmoid(sum) + noise[2][i])
 	}
@@ -216,29 +202,37 @@ func (nn *FeedForward) BackPropagate(targets []float64, lRate, mFactor float64) 
 		var e float64
 
 		for j := 0; j < nn.NOutputs; j++ {
-			e += outputDeltas[j] * nn.OutputWeights[i][j]
+			e += outputDeltas[j] * nn.OutputWeights[j][i]
 		}
 
 		hiddenDeltas[i] = dsigmoid(nn.HiddenActivations[i]) * e
 	}
 
+	change := make([]float64, nn.NOutputs)
 	for i := 0; i < nn.NHiddens; i++ {
+		copy(change, outputDeltas)
+		scal64(nn.HiddenActivations[i], change)
+		scal64(mFactor, nn.OutputChanges[i])
+		axpy64(lRate, change, nn.OutputChanges[i])
 		for j := 0; j < nn.NOutputs; j++ {
-			change := outputDeltas[j] * nn.HiddenActivations[i]
-			nn.OutputWeights[i][j] = nn.OutputWeights[i][j] + lRate*change + mFactor*nn.OutputChanges[i][j]
-			nn.OutputChanges[i][j] = change
+			nn.OutputWeights[j][i] = nn.OutputWeights[j][i] + nn.OutputChanges[i][j]
 		}
+		copy(nn.OutputChanges[i], change)
 	}
 
+	change = make([]float64, nn.NHiddens)
 	for i := 0; i < nn.NInputs; i++ {
+		copy(change, hiddenDeltas)
+		scal64(nn.InputActivations[i], change)
+		scal64(mFactor, nn.InputChanges[i])
+		axpy64(lRate, change, nn.InputChanges[i])
 		for j := 0; j < nn.NHiddens; j++ {
 			if len(nn.DropoutMask) != 0 && nn.DropoutMask[j] {
 				continue
 			}
-			change := hiddenDeltas[j] * nn.InputActivations[i]
-			nn.InputWeights[i][j] = nn.InputWeights[i][j] + lRate*change + mFactor*nn.InputChanges[i][j]
-			nn.InputChanges[i][j] = change
+			nn.InputWeights[j][i] = nn.InputWeights[j][i] + nn.InputChanges[i][j]
 		}
+		copy(nn.InputChanges[i], change)
 	}
 
 	var e float64
@@ -324,18 +318,18 @@ func (nn *FeedForward32) Init(inputs, hiddens, outputs int) {
 	nn.HiddenActivations = vector32(nn.NHiddens, 1.0)
 	nn.OutputActivations = vector32(nn.NOutputs, 1.0)
 
-	nn.InputWeights = matrix32(nn.NInputs, nn.NHiddens)
-	nn.OutputWeights = matrix32(nn.NHiddens, nn.NOutputs)
+	nn.InputWeights = matrix32(nn.NHiddens, nn.NInputs)
+	nn.OutputWeights = matrix32(nn.NOutputs, nn.NHiddens)
 
 	for i := 0; i < nn.NInputs; i++ {
 		for j := 0; j < nn.NHiddens; j++ {
-			nn.InputWeights[i][j] = random32(-1, 1)
+			nn.InputWeights[j][i] = random32(-1, 1)
 		}
 	}
 
 	for i := 0; i < nn.NHiddens; i++ {
 		for j := 0; j < nn.NOutputs; j++ {
-			nn.OutputWeights[i][j] = random32(-1, 1)
+			nn.OutputWeights[j][i] = random32(-1, 1)
 		}
 	}
 
@@ -387,11 +381,7 @@ func (nn *FeedForward32) Update(inputs []float32) []float32 {
 		if len(nn.DropoutMask) != 0 && nn.DropoutMask[i] {
 			continue
 		}
-		var sum float32
-
-		for j := 0; j < nn.NInputs; j++ {
-			sum += nn.InputActivations[j] * nn.InputWeights[j][i]
-		}
+		sum := dot32(nn.InputActivations, nn.InputWeights[i])
 
 		// compute contexts sum
 		for k := 0; k < len(nn.Contexts); k++ {
@@ -415,10 +405,7 @@ func (nn *FeedForward32) Update(inputs []float32) []float32 {
 	}
 
 	for i := 0; i < nn.NOutputs; i++ {
-		var sum float32
-		for j := 0; j < nn.NHiddens; j++ {
-			sum += nn.HiddenActivations[j] * nn.OutputWeights[j][i]
-		}
+		sum := dot32(nn.HiddenActivations, nn.OutputWeights[i])
 
 		nn.OutputActivations[i] = sigmoid32(sum)
 	}
@@ -439,11 +426,7 @@ func (nn *FeedForward32) UpdateWithNoise(inputs []float32, noise [][]float32) []
 		if len(nn.DropoutMask) != 0 && nn.DropoutMask[i] {
 			continue
 		}
-		var sum float32
-
-		for j := 0; j < nn.NInputs; j++ {
-			sum += nn.InputActivations[j] * nn.InputWeights[j][i]
-		}
+		sum := dot32(nn.InputActivations, nn.InputWeights[i])
 
 		// compute contexts sum
 		for k := 0; k < len(nn.Contexts); k++ {
@@ -467,10 +450,7 @@ func (nn *FeedForward32) UpdateWithNoise(inputs []float32, noise [][]float32) []
 	}
 
 	for i := 0; i < nn.NOutputs; i++ {
-		var sum float32
-		for j := 0; j < nn.NHiddens; j++ {
-			sum += nn.HiddenActivations[j] * nn.OutputWeights[j][i]
-		}
+		sum := dot32(nn.HiddenActivations, nn.OutputWeights[i])
 
 		nn.OutputActivations[i] = normalize32(sigmoid32(sum) + noise[2][i])
 	}
@@ -497,29 +477,37 @@ func (nn *FeedForward32) BackPropagate(targets []float32, lRate, mFactor float32
 		var e float32
 
 		for j := 0; j < nn.NOutputs; j++ {
-			e += outputDeltas[j] * nn.OutputWeights[i][j]
+			e += outputDeltas[j] * nn.OutputWeights[j][i]
 		}
 
 		hiddenDeltas[i] = dsigmoid32(nn.HiddenActivations[i]) * e
 	}
 
+	change := make([]float32, nn.NOutputs)
 	for i := 0; i < nn.NHiddens; i++ {
+		copy(change, outputDeltas)
+		scal32(nn.HiddenActivations[i], change)
+		scal32(mFactor, nn.OutputChanges[i])
+		axpy32(lRate, change, nn.OutputChanges[i])
 		for j := 0; j < nn.NOutputs; j++ {
-			change := outputDeltas[j] * nn.HiddenActivations[i]
-			nn.OutputWeights[i][j] = nn.OutputWeights[i][j] + lRate*change + mFactor*nn.OutputChanges[i][j]
-			nn.OutputChanges[i][j] = change
+			nn.OutputWeights[j][i] = nn.OutputWeights[j][i] + nn.OutputChanges[i][j]
 		}
+		copy(nn.OutputChanges[i], change)
 	}
 
+	change = make([]float32, nn.NHiddens)
 	for i := 0; i < nn.NInputs; i++ {
+		copy(change, hiddenDeltas)
+		scal32(nn.InputActivations[i], change)
+		scal32(mFactor, nn.InputChanges[i])
+		axpy32(lRate, change, nn.InputChanges[i])
 		for j := 0; j < nn.NHiddens; j++ {
 			if len(nn.DropoutMask) != 0 && nn.DropoutMask[j] {
 				continue
 			}
-			change := hiddenDeltas[j] * nn.InputActivations[i]
-			nn.InputWeights[i][j] = nn.InputWeights[i][j] + lRate*change + mFactor*nn.InputChanges[i][j]
-			nn.InputChanges[i][j] = change
+			nn.InputWeights[j][i] = nn.InputWeights[j][i] + nn.InputChanges[i][j]
 		}
+		copy(nn.InputChanges[i], change)
 	}
 
 	var e float32
