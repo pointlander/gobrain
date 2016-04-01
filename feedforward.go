@@ -104,6 +104,7 @@ func (nn *FeedForward) Update(inputs []float64) []float64 {
 
 	for i := 0; i < nn.NHiddens-1; i++ {
 		if len(nn.DropoutMask) != 0 && nn.DropoutMask[i] {
+			nn.HiddenActivations[i] = 0
 			continue
 		}
 		sum := dot64(nn.InputActivations, nn.InputWeights[i])
@@ -227,9 +228,6 @@ func (nn *FeedForward) BackPropagate(targets []float64, lRate, mFactor float64) 
 		scal64(mFactor, nn.InputChanges[i])
 		axpy64(lRate, change, nn.InputChanges[i])
 		for j := 0; j < nn.NHiddens; j++ {
-			if len(nn.DropoutMask) != 0 && nn.DropoutMask[j] {
-				continue
-			}
 			nn.InputWeights[j][i] = nn.InputWeights[j][i] + nn.InputChanges[i][j]
 		}
 		copy(nn.InputChanges[i], change)
@@ -363,6 +361,8 @@ func (nn *FeedForward32) SetContexts(nContexts int, initValues [][]float32) {
 	nn.Contexts = initValues
 }
 
+const DROPOUT_P = .5
+
 /*
 The Update method is used to activate the Neural Network.
 
@@ -378,9 +378,6 @@ func (nn *FeedForward32) Update(inputs []float32) []float32 {
 	}
 
 	for i := 0; i < nn.NHiddens-1; i++ {
-		if len(nn.DropoutMask) != 0 && nn.DropoutMask[i] {
-			continue
-		}
 		sum := dot32(nn.InputActivations, nn.InputWeights[i])
 
 		// compute contexts sum
@@ -391,8 +388,13 @@ func (nn *FeedForward32) Update(inputs []float32) []float32 {
 		}
 
 		nn.HiddenActivations[i] = sigmoid32(sum)
-		if len(nn.DropoutMask) == 0 && nn.Dropout {
-			nn.HiddenActivations[i] *= .5
+		//http://iamtrask.github.io/2015/07/28/dropout/
+		if len(nn.DropoutMask) != 0 {
+			if nn.DropoutMask[i] {
+				nn.HiddenActivations[i] = 0
+			} else {
+				nn.HiddenActivations[i] *= 1 / (1 - DROPOUT_P)
+			}
 		}
 	}
 
@@ -436,9 +438,6 @@ func (nn *FeedForward32) UpdateWithNoise(inputs []float32, noise [][]float32) []
 		}
 
 		nn.HiddenActivations[i] = normalize32(sigmoid32(sum) + noise[1][i])
-		if len(nn.DropoutMask) == 0 && nn.Dropout {
-			nn.HiddenActivations[i] *= .5
-		}
 	}
 
 	// update the contexts
@@ -502,9 +501,6 @@ func (nn *FeedForward32) BackPropagate(targets []float32, lRate, mFactor float32
 		scal32(mFactor, nn.InputChanges[i])
 		axpy32(lRate, change, nn.InputChanges[i])
 		for j := 0; j < nn.NHiddens; j++ {
-			if len(nn.DropoutMask) != 0 && nn.DropoutMask[j] {
-				continue
-			}
 			nn.InputWeights[j][i] = nn.InputWeights[j][i] + nn.InputChanges[i][j]
 		}
 		copy(nn.InputChanges[i], change)
@@ -530,9 +526,9 @@ func (nn *FeedForward32) Train(patterns [][][]float32, iterations int, lRate, mF
 		var e float32
 		for _, p := range patterns {
 			if nn.Dropout {
-				nn.DropoutMask = make([]bool, nn.NHiddens)
+				nn.DropoutMask = make([]bool, nn.NHiddens-1)
 				for d := range nn.DropoutMask {
-					nn.DropoutMask[d] = rand.Intn(2) == 0
+					nn.DropoutMask[d] = rand.Float64() > 1-DROPOUT_P
 				}
 			}
 			nn.Update(p[0])

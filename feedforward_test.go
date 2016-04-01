@@ -100,6 +100,46 @@ func ExampleSimpleFeedForward32() {
 	// [1 1] -> [0.09740849]  :  [0]
 }
 
+func ExampleSimpleFeedForwardDropOut32() {
+	// set the random seed to 0
+	rand.Seed(0)
+
+	// create the XOR representation patter to train the network
+	patterns := [][][]float32{
+		{{0, 0}, {0}},
+		{{0, 1}, {1}},
+		{{1, 0}, {1}},
+		{{1, 1}, {0}},
+	}
+
+	// instantiate the Feed Forward
+	ff := &FeedForward32{}
+	ff.Dropout = true
+	// initialize the Neural Network;
+	// the networks structure will contain:
+	ff.Init(2, 4, 1)
+	// 2 inputs, 2 hidden nodes and 1 output.
+
+	// train the network using the XOR patterns
+	// the training will run for 1000 epochs
+	// the learning rate is set to 0.6 and the momentum factor to 0.4
+	// use true in the last parameter to receive reports about the learning error
+	ff.Train(patterns, 60000, 0.6, 0.4, false)
+
+	// testing the network
+	ff.Test(patterns)
+
+	// predicting a value
+	inputs := []float32{1, 1}
+	ff.Update(inputs)
+
+	// Output:
+	// [0 0] -> [0.05750396]  :  [0]
+	// [0 1] -> [0.9301007]  :  [1]
+	// [1 0] -> [0.92781013]  :  [1]
+	// [1 1] -> [0.09740849]  :  [0]
+}
+
 func BenchmarkFeedForward32(b *testing.B) {
 	rand.Seed(0)
 	patterns := [][][]float32{
