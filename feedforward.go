@@ -23,8 +23,7 @@ type FeedForward struct {
 	// Last change in weights for momentum
 	InputChanges, OutputChanges [][]float64
 	// Set for dropout
-	Dropout     bool
-	DropoutMask []bool
+	Dropout float64
 }
 
 /*
@@ -94,6 +93,10 @@ The Update method is used to activate the Neural Network.
 Given an array of inputs, it returns an array, of length equivalent of number of outputs, with values ranging from 0 to 1.
 */
 func (nn *FeedForward) Update(inputs []float64) []float64 {
+	return nn.update(inputs, false)
+}
+
+func (nn *FeedForward) update(inputs []float64, train bool) []float64 {
 	if len(inputs) != nn.NInputs-1 {
 		log.Fatal("Error: wrong number of inputs")
 	}
@@ -103,10 +106,6 @@ func (nn *FeedForward) Update(inputs []float64) []float64 {
 	}
 
 	for i := 0; i < nn.NHiddens-1; i++ {
-		if len(nn.DropoutMask) != 0 && nn.DropoutMask[i] {
-			nn.HiddenActivations[i] = 0
-			continue
-		}
 		sum := dot64(nn.InputActivations, nn.InputWeights[i])
 
 		// compute contexts sum
@@ -117,8 +116,14 @@ func (nn *FeedForward) Update(inputs []float64) []float64 {
 		}
 
 		nn.HiddenActivations[i] = sigmoid(sum)
-		if len(nn.DropoutMask) == 0 && nn.Dropout {
-			nn.HiddenActivations[i] *= .5
+
+		//http://iamtrask.github.io/2015/07/28/dropout/
+		if train && nn.Dropout != 0 {
+			if rand.Float64() > 1-nn.Dropout {
+				nn.HiddenActivations[i] = 0
+			} else {
+				nn.HiddenActivations[i] *= 1 / (1 - nn.Dropout)
+			}
 		}
 	}
 
@@ -149,9 +154,6 @@ func (nn *FeedForward) UpdateWithNoise(inputs []float64, noise [][]float64) []fl
 	}
 
 	for i := 0; i < nn.NHiddens-1; i++ {
-		if len(nn.DropoutMask) != 0 && nn.DropoutMask[i] {
-			continue
-		}
 		sum := dot64(nn.InputActivations, nn.InputWeights[i])
 
 		// compute contexts sum
@@ -162,9 +164,6 @@ func (nn *FeedForward) UpdateWithNoise(inputs []float64, noise [][]float64) []fl
 		}
 
 		nn.HiddenActivations[i] = normalize(sigmoid(sum) + noise[1][i])
-		if len(nn.DropoutMask) == 0 && nn.Dropout {
-			nn.HiddenActivations[i] *= .5
-		}
 	}
 
 	// update the contexts
@@ -252,13 +251,7 @@ func (nn *FeedForward) Train(patterns [][][]float64, iterations int, lRate, mFac
 	for i := 0; i < iterations; i++ {
 		var e float64
 		for _, p := range patterns {
-			if nn.Dropout {
-				nn.DropoutMask = make([]bool, nn.NHiddens)
-				for d := range nn.DropoutMask {
-					nn.DropoutMask[d] = rand.Intn(2) == 0
-				}
-			}
-			nn.Update(p[0])
+			nn.update(p[0], true)
 
 			tmp := nn.BackPropagate(p[1], lRate, mFactor)
 			e += tmp
@@ -270,7 +263,6 @@ func (nn *FeedForward) Train(patterns [][][]float64, iterations int, lRate, mFac
 			fmt.Println(i, e)
 		}
 	}
-	nn.DropoutMask = nil
 
 	return errors
 }
@@ -296,8 +288,7 @@ type FeedForward32 struct {
 	// Last change in weights for momentum
 	InputChanges, OutputChanges [][]float32
 	// Set for dropout
-	Dropout     bool
-	DropoutMask []bool
+	Dropout float32
 }
 
 /*
@@ -361,14 +352,16 @@ func (nn *FeedForward32) SetContexts(nContexts int, initValues [][]float32) {
 	nn.Contexts = initValues
 }
 
-const DROPOUT_P = .5
-
 /*
 The Update method is used to activate the Neural Network.
 
 Given an array of inputs, it returns an array, of length equivalent of number of outputs, with values ranging from 0 to 1.
 */
 func (nn *FeedForward32) Update(inputs []float32) []float32 {
+	return nn.update(inputs, false)
+}
+
+func (nn *FeedForward32) update(inputs []float32, train bool) []float32 {
 	if len(inputs) != nn.NInputs-1 {
 		log.Fatal("Error: wrong number of inputs")
 	}
@@ -388,12 +381,13 @@ func (nn *FeedForward32) Update(inputs []float32) []float32 {
 		}
 
 		nn.HiddenActivations[i] = sigmoid32(sum)
+
 		//http://iamtrask.github.io/2015/07/28/dropout/
-		if len(nn.DropoutMask) != 0 {
-			if nn.DropoutMask[i] {
+		if train && nn.Dropout != 0 {
+			if rand.Float32() > 1-nn.Dropout {
 				nn.HiddenActivations[i] = 0
 			} else {
-				nn.HiddenActivations[i] *= 1 / (1 - DROPOUT_P)
+				nn.HiddenActivations[i] *= 1 / (1 - nn.Dropout)
 			}
 		}
 	}
@@ -432,9 +426,6 @@ func (nn *FeedForward32) UpdateWithNoise(inputs []float32, noise [][]float32) []
 	}
 
 	for i := 0; i < nn.NHiddens-1; i++ {
-		if len(nn.DropoutMask) != 0 && nn.DropoutMask[i] {
-			continue
-		}
 		sum := dot32(nn.InputActivations, nn.InputWeights[i])
 
 		// compute contexts sum
@@ -539,13 +530,7 @@ func (nn *FeedForward32) Train(patterns [][][]float32, iterations int, lRate, mF
 	for i := 0; i < iterations; i++ {
 		var e float32
 		for _, p := range patterns {
-			if nn.Dropout {
-				nn.DropoutMask = make([]bool, nn.NHiddens-1)
-				for d := range nn.DropoutMask {
-					nn.DropoutMask[d] = rand.Float64() > 1-DROPOUT_P
-				}
-			}
-			nn.Update(p[0])
+			nn.update(p[0], true)
 
 			tmp := nn.BackPropagate(p[1], lRate, mFactor)
 			e += tmp
@@ -557,7 +542,6 @@ func (nn *FeedForward32) Train(patterns [][][]float32, iterations int, lRate, mF
 			fmt.Println(i, e)
 		}
 	}
-	nn.DropoutMask = nil
 
 	return errors
 }
