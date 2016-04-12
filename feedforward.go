@@ -408,8 +408,11 @@ func (nn *FeedForward32) Update(inputs []float32) []float32 {
 
 	for i := 0; i < nn.NOutputs; i++ {
 		sum := dot32(nn.HiddenActivations, nn.OutputWeights[i])
-
-		nn.OutputActivations[i] = sigmoid32(sum)
+		if nn.Regression {
+			nn.OutputActivations[i] = sum
+		} else {
+			nn.OutputActivations[i] = sigmoid32(sum)
+		}
 	}
 
 	return nn.OutputActivations
@@ -421,7 +424,11 @@ func (nn *FeedForward32) UpdateWithNoise(inputs []float32, noise [][]float32) []
 	}
 
 	for i := 0; i < nn.NInputs-1; i++ {
-		nn.InputActivations[i] = normalize32(inputs[i] + noise[0][i])
+		if nn.Regression {
+			nn.InputActivations[i] = inputs[i] + noise[0][i]
+		} else {
+			nn.InputActivations[i] = normalize32(inputs[i] + noise[0][i])
+		}
 	}
 
 	for i := 0; i < nn.NHiddens-1; i++ {
@@ -450,8 +457,11 @@ func (nn *FeedForward32) UpdateWithNoise(inputs []float32, noise [][]float32) []
 
 	for i := 0; i < nn.NOutputs; i++ {
 		sum := dot32(nn.HiddenActivations, nn.OutputWeights[i])
-
-		nn.OutputActivations[i] = normalize32(sigmoid32(sum) + noise[2][i])
+		if nn.Regression {
+			nn.OutputActivations[i] = sum + noise[2][i]
+		} else {
+			nn.OutputActivations[i] = normalize32(sigmoid32(sum) + noise[2][i])
+		}
 	}
 
 	return nn.OutputActivations
@@ -468,7 +478,11 @@ func (nn *FeedForward32) BackPropagate(targets []float32, lRate, mFactor float32
 
 	outputDeltas := vector32(nn.NOutputs, 0.0)
 	for i := 0; i < nn.NOutputs; i++ {
-		outputDeltas[i] = dsigmoid32(nn.OutputActivations[i]) * (targets[i] - nn.OutputActivations[i])
+		if nn.Regression {
+			outputDeltas[i] = (targets[i] - nn.OutputActivations[i])
+		} else {
+			outputDeltas[i] = dsigmoid32(nn.OutputActivations[i]) * (targets[i] - nn.OutputActivations[i])
+		}
 	}
 
 	hiddenDeltas := vector32(nn.NHiddens, 0.0)
