@@ -135,10 +135,16 @@ func (nn *FeedForward) update(inputs []float64, train bool) []float64 {
 		nn.Contexts[0] = nn.HiddenActivations
 	}
 
-	for i := 0; i < nn.NOutputs; i++ {
-		sum := dot64(nn.HiddenActivations, nn.OutputWeights[i])
+	if nn.Regression {
+		for i := 0; i < nn.NOutputs; i++ {
+			nn.OutputActivations[i] = dot64(nn.HiddenActivations, nn.OutputWeights[i])
+		}
+	} else {
+		for i := 0; i < nn.NOutputs; i++ {
+			sum := dot64(nn.HiddenActivations, nn.OutputWeights[i])
 
-		nn.OutputActivations[i] = sigmoid(sum)
+			nn.OutputActivations[i] = sigmoid(sum)
+		}
 	}
 
 	return nn.OutputActivations
@@ -149,8 +155,14 @@ func (nn *FeedForward) UpdateWithNoise(inputs []float64, noise [][]float64) []fl
 		log.Fatal("Error: wrong number of inputs")
 	}
 
-	for i := 0; i < nn.NInputs-1; i++ {
-		nn.InputActivations[i] = normalize(inputs[i] + noise[0][i])
+	if nn.Regression {
+		for i := 0; i < nn.NInputs-1; i++ {
+			nn.InputActivations[i] = inputs[i] + noise[0][i]
+		}
+	} else {
+		for i := 0; i < nn.NInputs-1; i++ {
+			nn.InputActivations[i] = normalize(inputs[i] + noise[0][i])
+		}
 	}
 
 	for i := 0; i < nn.NHiddens-1; i++ {
@@ -174,10 +186,18 @@ func (nn *FeedForward) UpdateWithNoise(inputs []float64, noise [][]float64) []fl
 		nn.Contexts[0] = nn.HiddenActivations
 	}
 
-	for i := 0; i < nn.NOutputs; i++ {
-		sum := dot64(nn.HiddenActivations, nn.OutputWeights[i])
+	if nn.Regression {
+		for i := 0; i < nn.NOutputs; i++ {
+			sum := dot64(nn.HiddenActivations, nn.OutputWeights[i])
 
-		nn.OutputActivations[i] = normalize(sigmoid(sum) + noise[2][i])
+			nn.OutputActivations[i] = sum + noise[2][i]
+		}
+	} else {
+		for i := 0; i < nn.NOutputs; i++ {
+			sum := dot64(nn.HiddenActivations, nn.OutputWeights[i])
+
+			nn.OutputActivations[i] = normalize(sigmoid(sum) + noise[2][i])
+		}
 	}
 
 	return nn.OutputActivations
@@ -193,8 +213,14 @@ func (nn *FeedForward) BackPropagate(targets []float64, lRate, mFactor float64) 
 	}
 
 	outputDeltas := vector(nn.NOutputs, 0.0)
-	for i := 0; i < nn.NOutputs; i++ {
-		outputDeltas[i] = dsigmoid(nn.OutputActivations[i]) * (targets[i] - nn.OutputActivations[i])
+	if nn.Regression {
+		for i := 0; i < nn.NOutputs; i++ {
+			outputDeltas[i] = (targets[i] - nn.OutputActivations[i])
+		}
+	} else {
+		for i := 0; i < nn.NOutputs; i++ {
+			outputDeltas[i] = dsigmoid(nn.OutputActivations[i]) * (targets[i] - nn.OutputActivations[i])
+		}
 	}
 
 	hiddenDeltas := vector(nn.NHiddens, 0.0)
@@ -400,11 +426,14 @@ func (nn *FeedForward32) update(inputs []float32, train bool) []float32 {
 		nn.Contexts[0] = nn.HiddenActivations
 	}
 
-	for i := 0; i < nn.NOutputs; i++ {
-		sum := dot32(nn.HiddenActivations, nn.OutputWeights[i])
-		if nn.Regression {
-			nn.OutputActivations[i] = sum
-		} else {
+	if nn.Regression {
+		for i := 0; i < nn.NOutputs; i++ {
+			nn.OutputActivations[i] = dot32(nn.HiddenActivations, nn.OutputWeights[i])
+		}
+	} else {
+		for i := 0; i < nn.NOutputs; i++ {
+			sum := dot32(nn.HiddenActivations, nn.OutputWeights[i])
+
 			nn.OutputActivations[i] = sigmoid32(sum)
 		}
 	}
@@ -417,10 +446,12 @@ func (nn *FeedForward32) UpdateWithNoise(inputs []float32, noise [][]float32) []
 		log.Fatal("Error: wrong number of inputs")
 	}
 
-	for i := 0; i < nn.NInputs-1; i++ {
-		if nn.Regression {
+	if nn.Regression {
+		for i := 0; i < nn.NInputs-1; i++ {
 			nn.InputActivations[i] = inputs[i] + noise[0][i]
-		} else {
+		}
+	} else {
+		for i := 0; i < nn.NInputs-1; i++ {
 			nn.InputActivations[i] = normalize32(inputs[i] + noise[0][i])
 		}
 	}
@@ -446,11 +477,16 @@ func (nn *FeedForward32) UpdateWithNoise(inputs []float32, noise [][]float32) []
 		nn.Contexts[0] = nn.HiddenActivations
 	}
 
-	for i := 0; i < nn.NOutputs; i++ {
-		sum := dot32(nn.HiddenActivations, nn.OutputWeights[i])
-		if nn.Regression {
+	if nn.Regression {
+		for i := 0; i < nn.NOutputs; i++ {
+			sum := dot32(nn.HiddenActivations, nn.OutputWeights[i])
+
 			nn.OutputActivations[i] = sum + noise[2][i]
-		} else {
+		}
+	} else {
+		for i := 0; i < nn.NOutputs; i++ {
+			sum := dot32(nn.HiddenActivations, nn.OutputWeights[i])
+
 			nn.OutputActivations[i] = normalize32(sigmoid32(sum) + noise[2][i])
 		}
 	}
@@ -468,10 +504,12 @@ func (nn *FeedForward32) BackPropagate(targets []float32, lRate, mFactor float32
 	}
 
 	outputDeltas := vector32(nn.NOutputs, 0.0)
-	for i := 0; i < nn.NOutputs; i++ {
-		if nn.Regression {
+	if nn.Regression {
+		for i := 0; i < nn.NOutputs; i++ {
 			outputDeltas[i] = (targets[i] - nn.OutputActivations[i])
-		} else {
+		}
+	} else {
+		for i := 0; i < nn.NOutputs; i++ {
 			outputDeltas[i] = dsigmoid32(nn.OutputActivations[i]) * (targets[i] - nn.OutputActivations[i])
 		}
 	}
