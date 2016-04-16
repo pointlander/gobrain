@@ -10,9 +10,10 @@ func random(a, b float64) float64 {
 }
 
 func matrix(I, J int) [][]float64 {
-	m := make([][]float64, I)
+	m, dense, offset := make([][]float64, I), make([]float64, I*J), 0
 	for i := 0; i < I; i++ {
-		m[i] = make([]float64, J)
+		m[i] = dense[offset : offset+J]
+		offset += J
 	}
 	return m
 }
@@ -47,9 +48,10 @@ func random32(a, b float32) float32 {
 }
 
 func matrix32(I, J int) [][]float32 {
-	m := make([][]float32, I)
+	m, dense, offset := make([][]float32, I), make([]float32, I*J), 0
 	for i := 0; i < I; i++ {
-		m[i] = make([]float32, J)
+		m[i] = dense[offset : offset+J]
+		offset += J
 	}
 	return m
 }
