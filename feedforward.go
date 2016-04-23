@@ -261,7 +261,7 @@ func (nn *FeedForward) BackPropagate(targets []float64, lRate, mFactor float64) 
 	var e float64
 
 	for i := 0; i < len(targets); i++ {
-		e += 0.5 * math.Pow(targets[i]-nn.OutputActivations[i], 2)
+		e += math.Pow(targets[i]-nn.OutputActivations[i], 2)
 	}
 
 	return e
@@ -276,14 +276,16 @@ func (nn *FeedForward) Train(patterns [][][]float64, iterations int, lRate, mFac
 
 	for i := 0; i < iterations; i++ {
 		var e float64
+		var n int
 		for _, p := range patterns {
 			nn.update(p[0], true)
 
 			tmp := nn.BackPropagate(p[1], lRate, mFactor)
 			e += tmp
+			n += len(p[1])
 		}
 
-		errors[i] = e
+		errors[i] = e / float64(n)
 
 		if debug && i%1000 == 0 {
 			fmt.Println(i, e)
@@ -552,7 +554,7 @@ func (nn *FeedForward32) BackPropagate(targets []float32, lRate, mFactor float32
 	var e float32
 
 	for i := 0; i < len(targets); i++ {
-		e += 0.5 * float32(math.Pow(float64(targets[i]-nn.OutputActivations[i]), 2))
+		e += float32(math.Pow(float64(targets[i]-nn.OutputActivations[i]), 2))
 	}
 
 	return e
@@ -567,14 +569,16 @@ func (nn *FeedForward32) Train(patterns [][][]float32, iterations int, lRate, mF
 
 	for i := 0; i < iterations; i++ {
 		var e float32
+		var n int
 		for _, p := range patterns {
 			nn.update(p[0], true)
 
 			tmp := nn.BackPropagate(p[1], lRate, mFactor)
 			e += tmp
+			n += len(p[1])
 		}
 
-		errors[i] = e
+		errors[i] = e / float32(n)
 
 		if debug && i%1000 == 0 {
 			fmt.Println(i, e)
