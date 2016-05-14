@@ -64,6 +64,14 @@ func vector32(I int, fill float32) []float32 {
 	return v
 }
 
+func tanh32(x float32) float32 {
+	return 2/(1+float32(math.Exp(-2*float64(x)))) - 1
+}
+
+func dtanh32(y float32) float32 {
+	return 1 - y*y
+}
+
 func sigmoid32(x float32) float32 {
 	return 1 / (1 + float32(math.Exp(-float64(x))))
 }

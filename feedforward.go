@@ -317,6 +317,9 @@ type FeedForward32 struct {
 	InputChanges, OutputChanges [][]float32
 	// Set for dropout
 	Dropout float32
+	// Activation function
+	Activation  func(x float32) float32
+	DActivation func(y float32) float32
 }
 
 /*
@@ -352,6 +355,31 @@ func (nn *FeedForward32) Init(inputs, hiddens, outputs int) {
 
 	nn.InputChanges = matrix32(nn.NInputs, nn.NHiddens)
 	nn.OutputChanges = matrix32(nn.NHiddens, nn.NOutputs)
+
+	nn.Activation = sigmoid32
+	nn.DActivation = dsigmoid32
+}
+
+func (nn *FeedForward32) SetWeights(weights []float32) {
+	w := 0
+	for i := 0; i < nn.NInputs; i++ {
+		for j := 0; j < nn.NHiddens; j++ {
+			nn.InputWeights[j][i] = weights[w]
+			w++
+		}
+	}
+
+	for i := 0; i < nn.NHiddens; i++ {
+		for j := 0; j < nn.NOutputs; j++ {
+			nn.OutputWeights[j][i] = weights[w]
+			w++
+		}
+	}
+}
+
+func (nn *FeedForward32) SetTanhActivation() {
+	nn.Activation = tanh32
+	nn.DActivation = dtanh32
 }
 
 /*
@@ -408,7 +436,7 @@ func (nn *FeedForward32) update(inputs []float32, train bool) []float32 {
 			}
 		}
 
-		nn.HiddenActivations[i] = sigmoid32(sum)
+		nn.HiddenActivations[i] = nn.Activation(sum)
 
 		//http://iamtrask.github.io/2015/07/28/dropout/
 		if train && nn.Dropout != 0 {
@@ -436,7 +464,7 @@ func (nn *FeedForward32) update(inputs []float32, train bool) []float32 {
 		for i := 0; i < nn.NOutputs; i++ {
 			sum := dot32(nn.HiddenActivations, nn.OutputWeights[i])
 
-			nn.OutputActivations[i] = sigmoid32(sum)
+			nn.OutputActivations[i] = nn.Activation(sum)
 		}
 	}
 
@@ -468,7 +496,7 @@ func (nn *FeedForward32) UpdateWithNoise(inputs []float32, noise [][]float32) []
 			}
 		}
 
-		nn.HiddenActivations[i] = normalize32(sigmoid32(sum) + noise[1][i])
+		nn.HiddenActivations[i] = normalize32(nn.Activation(sum) + noise[1][i])
 	}
 
 	// update the contexts
@@ -489,7 +517,7 @@ func (nn *FeedForward32) UpdateWithNoise(inputs []float32, noise [][]float32) []
 		for i := 0; i < nn.NOutputs; i++ {
 			sum := dot32(nn.HiddenActivations, nn.OutputWeights[i])
 
-			nn.OutputActivations[i] = normalize32(sigmoid32(sum) + noise[2][i])
+			nn.OutputActivations[i] = normalize32(nn.Activation(sum) + noise[2][i])
 		}
 	}
 
@@ -512,7 +540,7 @@ func (nn *FeedForward32) BackPropagate(targets []float32, lRate, mFactor float32
 		}
 	} else {
 		for i := 0; i < nn.NOutputs; i++ {
-			outputDeltas[i] = dsigmoid32(nn.OutputActivations[i]) * (targets[i] - nn.OutputActivations[i])
+			outputDeltas[i] = nn.DActivation(nn.OutputActivations[i]) * (targets[i] - nn.OutputActivations[i])
 		}
 	}
 
@@ -524,7 +552,7 @@ func (nn *FeedForward32) BackPropagate(targets []float32, lRate, mFactor float32
 			e += outputDeltas[j] * nn.OutputWeights[j][i]
 		}
 
-		hiddenDeltas[i] = dsigmoid32(nn.HiddenActivations[i]) * e
+		hiddenDeltas[i] = nn.DActivation(nn.HiddenActivations[i]) * e
 	}
 
 	change := make([]float32, nn.NOutputs)
