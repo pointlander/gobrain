@@ -27,9 +27,9 @@ func (nn *RNN32) Init(inputs, hiddens, outputs int) {
 
 func (nn *RNN32) SetWeights(weights []float32) {
 	w := 0
-	for i := 0; i < nn.NInputs; i++ {
-		for j := 0; j < nn.NHiddens; j++ {
-			nn.InputWeights[j][i] = weights[w]
+	for i := 0; i < nn.NHiddens; i++ {
+		for j := 0; j < nn.NInputs; j++ {
+			nn.InputWeights[i][j] = weights[w]
 			w++
 		}
 	}
