@@ -12,3 +12,6 @@ http://arxiv.org/abs/1609.07061
 
 https://research.googleblog.com/2016/09/image-compression-with-neural-networks.html
 https://news.ycombinator.com/item?id=12606912
+
+https://news.ycombinator.com/item?id=13083092
+http://www.evolvingai.org/ppgn
