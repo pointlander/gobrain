@@ -423,6 +423,11 @@ func (nn *FeedForward32) Update(inputs []float32) []float32 {
 	context := Context32{
 		Activations: []Activation32{nn.Activation, nn.Activation},
 	}
+	if nn.Regression {
+		context.Activations[1] = func(x float32) float32 {
+			return x
+		}
+	}
 	return nn.update(inputs, &context)
 }
 
