@@ -322,6 +322,12 @@ type FeedForward32 struct {
 	DActivation func(y float32) float32
 }
 
+type Activation32 func(x float32) float32
+
+type Context32 struct {
+	Activations []Activation32
+}
+
 /*
 Initialize the neural network;
 
@@ -414,10 +420,13 @@ The Update method is used to activate the Neural Network.
 Given an array of inputs, it returns an array, of length equivalent of number of outputs, with values ranging from 0 to 1.
 */
 func (nn *FeedForward32) Update(inputs []float32) []float32 {
-	return nn.update(inputs, false)
+	context := Context32{
+		Activations: []Activation32{nn.Activation, nn.Activation},
+	}
+	return nn.update(inputs, &context)
 }
 
-func (nn *FeedForward32) update(inputs []float32, train bool) []float32 {
+func (nn *FeedForward32) update(inputs []float32, context *Context32) []float32 {
 	if len(inputs) != nn.NInputs-1 {
 		log.Fatal("Error: wrong number of inputs")
 	}
@@ -436,16 +445,7 @@ func (nn *FeedForward32) update(inputs []float32, train bool) []float32 {
 			}
 		}
 
-		nn.HiddenActivations[i] = nn.Activation(sum)
-
-		//http://iamtrask.github.io/2015/07/28/dropout/
-		if train && nn.Dropout != 0 {
-			if rand.Float32() > 1-nn.Dropout {
-				nn.HiddenActivations[i] = 0
-			} else {
-				nn.HiddenActivations[i] *= 1 / (1 - nn.Dropout)
-			}
-		}
+		nn.HiddenActivations[i] = context.Activations[0](sum)
 	}
 
 	// update the contexts
@@ -454,6 +454,24 @@ func (nn *FeedForward32) update(inputs []float32, train bool) []float32 {
 			nn.Contexts[i] = nn.Contexts[i-1]
 		}
 		nn.Contexts[0] = nn.HiddenActivations
+	}
+
+	for i := 0; i < nn.NOutputs; i++ {
+		sum := dot32(nn.HiddenActivations, nn.OutputWeights[i])
+
+		nn.OutputActivations[i] = context.Activations[1](sum)
+	}
+
+	return nn.OutputActivations
+}
+
+func (nn *FeedForward32) HalfUpdate(inputs []float32) []float32 {
+	if len(inputs) != nn.NHiddens-1 {
+		log.Fatal("Error: wrong number of inputs")
+	}
+
+	for i := 0; i < nn.NHiddens-1; i++ {
+		nn.HiddenActivations[i] = inputs[i]
 	}
 
 	if nn.Regression {
@@ -588,18 +606,76 @@ func (nn *FeedForward32) BackPropagate(targets []float32, lRate, mFactor float32
 	return e
 }
 
+func (nn *FeedForward32) GenerateContext() *Context32 {
+	hidden, output := nn.Activation, nn.Activation
+
+	//http://iamtrask.github.io/2015/07/28/dropout/
+	if nn.Dropout != 0 {
+		hidden = func(x float32) float32 {
+			x = nn.Activation(x)
+			if rand.Float32() > 1-nn.Dropout {
+				x = 0
+			} else {
+				x *= 1 / (1 - nn.Dropout)
+			}
+			return x
+		}
+	}
+
+	if nn.Regression {
+		output = func(x float32) float32 {
+			return x
+		}
+	}
+
+	context := Context32{
+		Activations: []Activation32{hidden, output},
+	}
+
+	return &context
+}
+
 /*
 This method is used to train the Network, it will run the training operation for 'iterations' times
 and return the computed errors when training.
 */
 func (nn *FeedForward32) Train(patterns [][][]float32, iterations int, lRate, mFactor float32, debug bool) []float32 {
-	errors := make([]float32, iterations)
+	errors, context := make([]float32, iterations), nn.GenerateContext()
 
 	for i := 0; i < iterations; i++ {
 		var e float32
 		var n int
 		for _, p := range patterns {
-			nn.update(p[0], true)
+			nn.update(p[0], context)
+
+			tmp := nn.BackPropagate(p[1], lRate, mFactor)
+			e += tmp
+			n += len(p[1])
+		}
+
+		errors[i] = e / float32(n)
+
+		if debug && i%1000 == 0 {
+			fmt.Println(i, e)
+		}
+	}
+
+	return errors
+}
+
+func (nn *FeedForward32) TrainQuant(patterns [][][]float32, iterations int, lRate, mFactor float32, debug bool, quant uint) []float32 {
+	errors, context := make([]float32, iterations), nn.GenerateContext()
+	hidden, mask := context.Activations[0], uint8(0xFF)<<quant
+	context.Activations[0] = func(x float32) float32 {
+		x = hidden(x)
+		return float32(uint8(x*255)&mask) / 255
+	}
+
+	for i := 0; i < iterations; i++ {
+		var e float32
+		var n int
+		for _, p := range patterns {
+			nn.update(p[0], context)
 
 			tmp := nn.BackPropagate(p[1], lRate, mFactor)
 			e += tmp
