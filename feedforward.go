@@ -347,15 +347,18 @@ func (nn *FeedForward32) Init(inputs, hiddens, outputs int) {
 	nn.InputWeights = matrix32(nn.NHiddens, nn.NInputs)
 	nn.OutputWeights = matrix32(nn.NOutputs, nn.NHiddens)
 
+	// http://stats.stackexchange.com/questions/47590/what-are-good-initial-weights-in-a-neural-network
+	scale := float32(math.Sqrt(float64(nn.NInputs)))
 	for i := 0; i < nn.NInputs; i++ {
 		for j := 0; j < nn.NHiddens; j++ {
-			nn.InputWeights[j][i] = random32(-1, 1)
+			nn.InputWeights[j][i] = random32(-1, 1) / scale
 		}
 	}
 
+	scale = float32(math.Sqrt(float64(nn.NHiddens)))
 	for i := 0; i < nn.NHiddens; i++ {
 		for j := 0; j < nn.NOutputs; j++ {
-			nn.OutputWeights[j][i] = random32(-1, 1)
+			nn.OutputWeights[j][i] = random32(-1, 1) / scale
 		}
 	}
 
