@@ -325,8 +325,14 @@ type FeedForward32 struct {
 type Activation32 func(x float32) float32
 
 type Context32 struct {
+	Iterations     int
+	LRate, MFactor float32
+	Debug          bool
+
 	Activations []Activation32
 }
+
+type Config32 func(context *Context32) *Context32
 
 /*
 Initialize the neural network;
@@ -614,7 +620,22 @@ func (nn *FeedForward32) BackPropagate(targets []float32, lRate, mFactor float32
 	return e
 }
 
-func (nn *FeedForward32) GenerateContext() *Context32 {
+/*
+This method is used to train the Network, it will run the training operation for 'iterations' times
+and return the computed errors when training.
+*/
+func (nn *FeedForward32) Train(patterns [][][]float32, iterations int, lRate, mFactor float32, debug bool) []float32 {
+	config := func(context *Context32) *Context32 {
+		context.Iterations = iterations
+		context.LRate = lRate
+		context.MFactor = mFactor
+		context.Debug = debug
+		return context
+	}
+	return nn.TrainWithConfig(patterns, config)
+}
+
+func (nn *FeedForward32) TrainWithConfig(patterns [][][]float32, config Config32) []float32 {
 	hidden, output := nn.Activation, nn.Activation
 
 	//http://iamtrask.github.io/2015/07/28/dropout/
@@ -636,63 +657,32 @@ func (nn *FeedForward32) GenerateContext() *Context32 {
 		}
 	}
 
-	context := Context32{
-		Activations: []Activation32{hidden, output},
-	}
+	context := config(
+		&Context32{
+			Iterations:  10,
+			LRate:       0.6,
+			MFactor:     0.4,
+			Debug:       false,
+			Activations: []Activation32{hidden, output},
+		},
+	)
 
-	return &context
-}
+	errors := make([]float32, context.Iterations)
 
-/*
-This method is used to train the Network, it will run the training operation for 'iterations' times
-and return the computed errors when training.
-*/
-func (nn *FeedForward32) Train(patterns [][][]float32, iterations int, lRate, mFactor float32, debug bool) []float32 {
-	errors, context := make([]float32, iterations), nn.GenerateContext()
-
-	for i := 0; i < iterations; i++ {
+	for i := 0; i < context.Iterations; i++ {
 		var e float32
 		var n int
 		for _, p := range patterns {
 			nn.update(p[0], context)
 
-			tmp := nn.BackPropagate(p[1], lRate, mFactor)
+			tmp := nn.BackPropagate(p[1], context.LRate, context.MFactor)
 			e += tmp
 			n += len(p[1])
 		}
 
 		errors[i] = e / float32(n)
 
-		if debug && i%1000 == 0 {
-			fmt.Println(i, e)
-		}
-	}
-
-	return errors
-}
-
-func (nn *FeedForward32) TrainQuant(patterns [][][]float32, iterations int, lRate, mFactor float32, debug bool, quant uint) []float32 {
-	errors, context := make([]float32, iterations), nn.GenerateContext()
-	hidden, mask := context.Activations[0], uint8(0xFF)<<quant
-	context.Activations[0] = func(x float32) float32 {
-		x = hidden(x)
-		return float32(uint8(x*255)&mask) / 255
-	}
-
-	for i := 0; i < iterations; i++ {
-		var e float32
-		var n int
-		for _, p := range patterns {
-			nn.update(p[0], context)
-
-			tmp := nn.BackPropagate(p[1], lRate, mFactor)
-			e += tmp
-			n += len(p[1])
-		}
-
-		errors[i] = e / float32(n)
-
-		if debug && i%1000 == 0 {
+		if context.Debug && i%1000 == 0 {
 			fmt.Println(i, e)
 		}
 	}
